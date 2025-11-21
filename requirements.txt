@@ -1,0 +1,10 @@
+netifaces
+fastapi
+uvicorn
+pydantic
+websockets
+pytest
+pytest-asyncio
+redis
+paho-mqtt
+psutil
