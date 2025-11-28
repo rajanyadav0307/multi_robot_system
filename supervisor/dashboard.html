@@ -7,6 +7,7 @@
     body { padding: 20px; }
     .status-alive { color: green; font-weight: bold; }
     .status-disconnected { color: red; font-weight: bold; }
+    .ack-output { color: blue; font-family: monospace; white-space: pre-wrap; }
   </style>
 </head>
 <body>
@@ -19,7 +20,7 @@
       <select id="robotSelect" class="form-select"></select>
     </div>
     <div class="col-md-4">
-      <input id="commandInput" class="form-control" placeholder="Enter Command (move, scan, stop)">
+      <input id="commandInput" class="form-control" placeholder="Enter Command (move, scan, stop or bash)">
     </div>
     <div class="col-md-4">
       <button class="btn btn-primary w-100" onclick="sendCommand()">Send Command</button>
@@ -32,6 +33,7 @@
         <th>Robot ID</th>
         <th>Status</th>
         <th>Last Task</th>
+        <th>Last Task Output</th>
         <th>Last Seen</th>
         <th>Battery</th>
         <th>CPU</th>
@@ -51,7 +53,6 @@
   ws.onmessage = event => {
     const robots = JSON.parse(event.data);
 
-    // Remember selected robot
     const selectedRobot = robotDropdown.value;
 
     // Rebuild dropdown
@@ -76,6 +77,7 @@
           <td>${rid}</td>
           <td class="${state.status === "alive" ? "status-alive" : "status-disconnected"}">${state.status}</td>
           <td>${state.last_task || "idle"}</td>
+          <td class="ack-output">${state.last_task_output || ""}</td>
           <td>${new Date(state.last_seen * 1000).toLocaleTimeString()}</td>
           <td>${state.battery_percent}</td>
           <td>${state.cpu_percent}</td>
@@ -99,7 +101,16 @@
       return;
     }
 
-    ws.send(JSON.stringify({ target, cmd }));
+    // Detect bash commands (optional: you can prefix with "bash:")
+    let type = "command";
+    if (cmd.startsWith("bash:")) {
+      type = "bash";
+      cmd_to_send = cmd.replace(/^bash:/, "").trim();
+    } else {
+      cmd_to_send = cmd;
+    }
+
+    ws.send(JSON.stringify({ target, cmd: cmd_to_send, type }));
     document.getElementById("commandInput").value = "";
   }
 </script>

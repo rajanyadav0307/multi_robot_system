@@ -14,6 +14,7 @@ def make_robot_state(overrides=None):
     base = {
         "status": "disconnected",
         "last_task": "idle",
+        "last_task_output": "",
         "last_seen": get_timestamp(),
         "battery_percent": 0.0,
         "cpu_percent": 0.0,
@@ -74,18 +75,36 @@ async def handle_client(reader, writer):
 
             elif mtype == "ack":
                 task = msg.get("task", "unknown")
+                output = msg.get("output", "")
                 cur = json.loads(r.hget("robots", robot_id))
-
                 cur["last_task"] = task
-                cur["last_ack_time"] = get_timestamp()  # track recent ACK
+                cur["last_task_output"] = output
+                cur["last_ack_time"] = get_timestamp()
                 cur["last_seen"] = get_timestamp()
 
                 # Maintain last 20 ACKs
                 history = cur.get("ack_history", [])
-                history.append({"task": task, "time": get_timestamp()})
+                history.append({"task": task, "output": output, "time": get_timestamp()})
                 if len(history) > 20:
                     history.pop(0)
                 cur["ack_history"] = history
+
+                r.hset("robots", robot_id, json.dumps(cur))
+
+            elif mtype == "bash_output":
+                task = msg.get("task", "")
+                output = msg.get("output", "")
+                cur = json.loads(r.hget("robots", robot_id))
+                cur["last_task"] = task
+                cur["last_task_output"] = output
+                cur["last_seen"] = get_timestamp()
+
+                # Maintain last 20 bash outputs
+                history = cur.get("bash_history", [])
+                history.append({"task": task, "output": output, "time": get_timestamp()})
+                if len(history) > 20:
+                    history.pop(0)
+                cur["bash_history"] = history
 
                 r.hset("robots", robot_id, json.dumps(cur))
 

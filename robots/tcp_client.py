@@ -2,6 +2,7 @@ import asyncio
 import json
 import time
 import psutil
+import subprocess
 from common.config import SUPERVISOR_IP, SUPERVISOR_PORT, HEARTBEAT_INTERVAL
 from common.utils import get_robot_id, get_timestamp
 
@@ -36,13 +37,42 @@ async def handle_server(reader, writer):
         line = await reader.readline()
         if not line:
             break
-        msg = json.loads(line.decode())
-        cmd = msg.get("cmd")
-        if cmd:
-            print(f"[ROBOT] ✅ Received command: {cmd}")
-            writer.write(json.dumps({"type": "ack", "task": cmd}).encode() + b"\n")
-            await writer.drain()
-            print(f"[ROBOT] ✅ Sent ACK for {cmd}")
+        try:
+            msg = json.loads(line.decode())
+            cmd = msg.get("cmd")
+            cmd_type = msg.get("type", "command")
+
+            if cmd_type == "bash" and cmd:
+                print(f"[ROBOT] ⚡ Executing bash: {cmd}")
+                try:
+                    result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
+                    output = result.stdout + result.stderr
+                except Exception as e:
+                    output = f"Error: {e}"
+
+                # Send bash output as ACK type
+                ack_msg = json.dumps({
+                    "type": "bash_output",
+                    "task": cmd,
+                    "output": output
+                }).encode() + b"\n"
+                writer.write(ack_msg)
+                await writer.drain()
+                print(f"[ROBOT] ✅ Sent bash output for {cmd}")
+
+            elif cmd:
+                print(f"[ROBOT] ✅ Received command: {cmd}")
+                ack_msg = json.dumps({
+                    "type": "ack",
+                    "task": cmd,
+                    "output": ""
+                }).encode() + b"\n"
+                writer.write(ack_msg)
+                await writer.drain()
+                print(f"[ROBOT] ✅ Sent ACK for {cmd}")
+
+        except Exception as e:
+            print(f"[ROBOT] ❌ Error handling message: {e}")
 
 async def robot_main():
     while True:

@@ -1,8 +1,6 @@
 import json
 import paho.mqtt.client as mqtt
-from common.config import MQTT_BROKER, MQTT_PORT
 from supervisor.state import connected_robots
-import asyncio
 
 class MQTTGateway:
     """Bridges MQTT commands → TCP robots (same-process only)"""
@@ -13,7 +11,7 @@ class MQTTGateway:
 
     def start(self):
         try:
-            self.client.connect(MQTT_BROKER, MQTT_PORT)
+            self.client.connect("localhost", 1883)
             self.client.subscribe("robot/+/commands")
             self.client.loop_start()
             print("[MQTT] ✅ Gateway connected and listening")
@@ -25,17 +23,17 @@ class MQTTGateway:
             payload = json.loads(msg.payload.decode())
             robot_id = msg.topic.split("/")[1]
             cmd = payload.get("cmd", "noop")
+            cmd_type = payload.get("type", "command")
 
-            print(f"[MQTT] 📥 Command for {robot_id}: {cmd}")
+            print(f"[MQTT] 📥 Command for {robot_id}: {cmd} ({cmd_type})")
 
             if robot_id not in connected_robots:
                 print(f"[MQTT] ❌ Robot {robot_id} NOT connected")
                 return
 
             writer = connected_robots[robot_id]
-
             tcp_msg = json.dumps({
-                "type": "command",
+                "type": cmd_type,
                 "cmd": cmd
             }).encode() + b"\n"
 
