@@ -14,7 +14,6 @@
 <div class="container">
   <h2>Robot Supervisor Dashboard</h2>
 
-  <!-- Command Section -->
   <div class="row mb-3">
     <div class="col-md-4">
       <select id="robotSelect" class="form-select"></select>
@@ -27,7 +26,6 @@
     </div>
   </div>
 
-  <!-- Robot Table -->
   <table class="table table-striped table-hover">
     <thead>
       <tr>
@@ -43,90 +41,67 @@
     </thead>
     <tbody id="robotTable"></tbody>
   </table>
-
-  <!-- Task History -->
-  <h4>Task History</h4>
-  <table class="table table-sm table-bordered">
-    <thead>
-      <tr>
-        <th>Robot ID</th>
-        <th>Task</th>
-        <th>Time</th>
-      </tr>
-    </thead>
-    <tbody id="taskHistory"></tbody>
-  </table>
 </div>
 
 <script>
-const ws = new WebSocket("ws://127.0.0.1:8000/ws");
-const robotDropdown = document.getElementById("robotSelect");
-const robotTable = document.getElementById("robotTable");
-const taskHistory = document.getElementById("taskHistory");
+  const ws = new WebSocket("ws://127.0.0.1:8000/ws");
+  const robotDropdown = document.getElementById("robotSelect");
+  const robotTable = document.getElementById("robotTable");
 
-ws.onmessage = event => {
+  ws.onmessage = event => {
     const robots = JSON.parse(event.data);
-    robotTable.innerHTML = "";
+
+    // Remember selected robot
+    const selectedRobot = robotDropdown.value;
+
+    // Rebuild dropdown
     robotDropdown.innerHTML = "";
-    taskHistory.innerHTML = "";
+    for (const rid of Object.keys(robots)) {
+      const option = document.createElement("option");
+      option.value = rid;
+      option.text = rid;
+      robotDropdown.add(option);
+    }
 
-    const prevSelected = robotDropdown.value;
+    // Restore previous selection if still exists
+    if (selectedRobot && robots[selectedRobot]) {
+      robotDropdown.value = selectedRobot;
+    }
 
+    // Rebuild table
+    robotTable.innerHTML = "";
     for (const [rid, state] of Object.entries(robots)) {
-        // Dropdown
-        const option = document.createElement("option");
-        option.value = rid;
-        option.textContent = rid;
-        robotDropdown.appendChild(option);
-
-        // Highlight row if ACK is recent (last 2 seconds)
-        const now = Math.floor(Date.now() / 1000);
-        const highlight = state.last_ack_time && (now - state.last_ack_time <= 2);
-
-        const row = document.createElement("tr");
-        if (highlight) row.style.backgroundColor = "#d4edda"; // light green flash
-        row.innerHTML = `
-            <td>${rid}</td>
-            <td class="${state.status === "alive" ? "status-alive" : "status-disconnected"}">${state.status}</td>
-            <td>${state.last_task || "idle"}</td>
-            <td>${new Date(state.last_seen * 1000).toLocaleTimeString()}</td>
-            <td>${state.battery_percent}</td>
-            <td>${state.cpu_percent}</td>
-            <td>${state.memory_percent}</td>
-            <td>${state.uptime_sec}</td>
-        `;
-        robotTable.appendChild(row);
-
-        // Task history
-        if (state.ack_history) {
-            state.ack_history.slice().reverse().forEach(h => {
-                const tr = document.createElement("tr");
-                tr.innerHTML = `
-                    <td>${rid}</td>
-                    <td>${h.task}</td>
-                    <td>${new Date(h.time * 1000).toLocaleTimeString()}</td>
-                `;
-                taskHistory.appendChild(tr);
-            });
-        }
+      const row = `
+        <tr>
+          <td>${rid}</td>
+          <td class="${state.status === "alive" ? "status-alive" : "status-disconnected"}">${state.status}</td>
+          <td>${state.last_task || "idle"}</td>
+          <td>${new Date(state.last_seen * 1000).toLocaleTimeString()}</td>
+          <td>${state.battery_percent}</td>
+          <td>${state.cpu_percent}</td>
+          <td>${state.memory_percent}</td>
+          <td>${state.uptime_sec}</td>
+        </tr>`;
+      robotTable.insertAdjacentHTML("beforeend", row);
     }
+  };
 
-    if(prevSelected && robots[prevSelected]){
-        robotDropdown.value = prevSelected;
-    }
-};
-
-function sendCommand() {
+  function sendCommand() {
     const target = robotDropdown.value;
-    const cmd = document.getElementById("commandInput").value.trim();
-    if(!target || !cmd){
-        alert("Select a robot and enter a command!");
-        return;
+    const cmd = document.getElementById("commandInput").value;
+
+    if (!target) {
+      alert("Please select a robot first!");
+      return;
+    }
+    if (!cmd) {
+      alert("Please enter a command!");
+      return;
     }
 
     ws.send(JSON.stringify({ target, cmd }));
     document.getElementById("commandInput").value = "";
-}
+  }
 </script>
 
 </body>
