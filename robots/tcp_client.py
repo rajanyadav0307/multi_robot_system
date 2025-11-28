@@ -1,4 +1,3 @@
-# robots/tcp_client.py
 import asyncio
 import json
 import time
@@ -8,24 +7,18 @@ from common.utils import get_robot_id, get_timestamp
 
 robot_id = get_robot_id()
 
-
 async def send_heartbeat(writer):
     while True:
         writer.write(json.dumps({"type": "heartbeat"}).encode() + b"\n")
         await writer.drain()
         await asyncio.sleep(HEARTBEAT_INTERVAL)
 
-
 async def send_telemetry(writer):
     start = time.time()
     while True:
         uptime = int(time.time() - start)
-
-        try:
-            batt = psutil.sensors_battery()
-            battery = float(batt.percent) if batt else 0.0
-        except:
-            battery = 0.0
+        batt = psutil.sensors_battery()
+        battery = float(batt.percent) if batt else 0.0
 
         telem = {
             "battery_percent": round(battery, 2),
@@ -34,28 +27,22 @@ async def send_telemetry(writer):
             "uptime_sec": uptime,
             "last_seen": get_timestamp(),
         }
-
         writer.write(json.dumps({"type": "telemetry", "payload": telem}).encode() + b"\n")
         await writer.drain()
         await asyncio.sleep(HEARTBEAT_INTERVAL * 2)
-
 
 async def handle_server(reader, writer):
     while True:
         line = await reader.readline()
         if not line:
             break
-
         msg = json.loads(line.decode())
-        task = msg.get("cmd") or msg.get("task")
-
-        if task:
-            writer.write(json.dumps({"type": "ack", "task": task}).encode() + b"\n")
+        cmd = msg.get("cmd")
+        if cmd:
+            print(f"[ROBOT] ✅ Received command: {cmd}")
+            writer.write(json.dumps({"type": "ack", "task": cmd}).encode() + b"\n")
             await writer.drain()
-            await asyncio.sleep(1)
-            writer.write(json.dumps({"type": "ack", "task": task}).encode() + b"\n")
-            await writer.drain()
-
+            print(f"[ROBOT] ✅ Sent ACK for {cmd}")
 
 async def robot_main():
     while True:
@@ -64,13 +51,13 @@ async def robot_main():
             writer.write((robot_id + "\n").encode())
             await writer.drain()
 
-            hb = asyncio.create_task(send_heartbeat(writer))
-            telem = asyncio.create_task(send_telemetry(writer))
-            await handle_server(reader, writer)
+            print(f"[ROBOT] ✅ Connected as {robot_id}")
 
+            hb_task = asyncio.create_task(send_heartbeat(writer))
+            telem_task = asyncio.create_task(send_telemetry(writer))
+            await handle_server(reader, writer)
         except:
             await asyncio.sleep(5)
-
 
 if __name__ == "__main__":
     asyncio.run(robot_main())

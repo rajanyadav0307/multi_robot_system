@@ -1,0 +1,33 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+.venv/
+env/
+venv/
+
+# Redis dump files
+dump.rdb
+
+# Logs
+*.log
+
+# VSCode or editor files
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# MacOS system files
+.DS_Store
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Node modules (if any front-end tools used)
+node_modules/
+
+# Uvicorn / FastAPI auto reload files
+*.pyc

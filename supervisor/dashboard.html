@@ -1,0 +1,133 @@
+<!doctype html>
+<html>
+<head>
+  <title>Robot Supervisor Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { padding: 20px; }
+    .status-alive { color: green; font-weight: bold; }
+    .status-disconnected { color: red; font-weight: bold; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h2>Robot Supervisor Dashboard</h2>
+
+  <!-- Command Section -->
+  <div class="row mb-3">
+    <div class="col-md-4">
+      <select id="robotSelect" class="form-select"></select>
+    </div>
+    <div class="col-md-4">
+      <input id="commandInput" class="form-control" placeholder="Enter Command (move, scan, stop)">
+    </div>
+    <div class="col-md-4">
+      <button class="btn btn-primary w-100" onclick="sendCommand()">Send Command</button>
+    </div>
+  </div>
+
+  <!-- Robot Table -->
+  <table class="table table-striped table-hover">
+    <thead>
+      <tr>
+        <th>Robot ID</th>
+        <th>Status</th>
+        <th>Last Task</th>
+        <th>Last Seen</th>
+        <th>Battery</th>
+        <th>CPU</th>
+        <th>Memory</th>
+        <th>Uptime</th>
+      </tr>
+    </thead>
+    <tbody id="robotTable"></tbody>
+  </table>
+
+  <!-- Task History -->
+  <h4>Task History</h4>
+  <table class="table table-sm table-bordered">
+    <thead>
+      <tr>
+        <th>Robot ID</th>
+        <th>Task</th>
+        <th>Time</th>
+      </tr>
+    </thead>
+    <tbody id="taskHistory"></tbody>
+  </table>
+</div>
+
+<script>
+const ws = new WebSocket("ws://127.0.0.1:8000/ws");
+const robotDropdown = document.getElementById("robotSelect");
+const robotTable = document.getElementById("robotTable");
+const taskHistory = document.getElementById("taskHistory");
+
+ws.onmessage = event => {
+    const robots = JSON.parse(event.data);
+    robotTable.innerHTML = "";
+    robotDropdown.innerHTML = "";
+    taskHistory.innerHTML = "";
+
+    const prevSelected = robotDropdown.value;
+
+    for (const [rid, state] of Object.entries(robots)) {
+        // Dropdown
+        const option = document.createElement("option");
+        option.value = rid;
+        option.textContent = rid;
+        robotDropdown.appendChild(option);
+
+        // Highlight row if ACK is recent (last 2 seconds)
+        const now = Math.floor(Date.now() / 1000);
+        const highlight = state.last_ack_time && (now - state.last_ack_time <= 2);
+
+        const row = document.createElement("tr");
+        if (highlight) row.style.backgroundColor = "#d4edda"; // light green flash
+        row.innerHTML = `
+            <td>${rid}</td>
+            <td class="${state.status === "alive" ? "status-alive" : "status-disconnected"}">${state.status}</td>
+            <td>${state.last_task || "idle"}</td>
+            <td>${new Date(state.last_seen * 1000).toLocaleTimeString()}</td>
+            <td>${state.battery_percent}</td>
+            <td>${state.cpu_percent}</td>
+            <td>${state.memory_percent}</td>
+            <td>${state.uptime_sec}</td>
+        `;
+        robotTable.appendChild(row);
+
+        // Task history
+        if (state.ack_history) {
+            state.ack_history.slice().reverse().forEach(h => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td>${rid}</td>
+                    <td>${h.task}</td>
+                    <td>${new Date(h.time * 1000).toLocaleTimeString()}</td>
+                `;
+                taskHistory.appendChild(tr);
+            });
+        }
+    }
+
+    if(prevSelected && robots[prevSelected]){
+        robotDropdown.value = prevSelected;
+    }
+};
+
+function sendCommand() {
+    const target = robotDropdown.value;
+    const cmd = document.getElementById("commandInput").value.trim();
+    if(!target || !cmd){
+        alert("Select a robot and enter a command!");
+        return;
+    }
+
+    ws.send(JSON.stringify({ target, cmd }));
+    document.getElementById("commandInput").value = "";
+}
+</script>
+
+</body>
+</html>
