@@ -16,6 +16,9 @@ REQUIRED_MODULES = [
     "redis",
     "paho.mqtt.client",
     "psutil",
+    "grpc",
+    "grpc_tools",
+    "google.protobuf",
 ]
 
 

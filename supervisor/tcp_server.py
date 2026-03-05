@@ -3,6 +3,7 @@ import json
 import time
 import redis
 from redis.exceptions import RedisError
+from common.command_store import mark_command_completed
 from common.config import (
     SUPERVISOR_BIND_IP,
     SUPERVISOR_PORT,
@@ -153,6 +154,8 @@ async def handle_client(reader, writer):
                 cur["ack_history"] = history
 
                 save_robot_state(robot_id, cur)
+                if command_id:
+                    mark_command_completed(command_id, output=output, ack_type="ack")
 
             elif mtype == "bash_output":
                 task = msg.get("task", "")
@@ -178,6 +181,8 @@ async def handle_client(reader, writer):
                 cur["bash_history"] = history
 
                 save_robot_state(robot_id, cur)
+                if command_id:
+                    mark_command_completed(command_id, output=output, ack_type="bash_output")
             else:
                 print(f"[TCP SERVER] ⚠️ Unknown message type from {robot_id}: {mtype}")
 

@@ -19,6 +19,9 @@ def test_config_defaults(monkeypatch):
         "WEB_MONITOR_BIND_IP",
         "WEB_MONITOR_IP",
         "WEB_MONITOR_PORT",
+        "GRPC_BIND_IP",
+        "GRPC_HOST",
+        "GRPC_PORT",
     ]
     for key in keys:
         monkeypatch.delenv(key, raising=False)
@@ -30,10 +33,13 @@ def test_config_defaults(monkeypatch):
     assert cfg.REDIS_HOST == "127.0.0.1"
     assert cfg.MQTT_BROKER == "127.0.0.1"
     assert cfg.WEB_MONITOR_BIND_IP == "0.0.0.0"
+    assert cfg.GRPC_BIND_IP == "0.0.0.0"
+    assert cfg.GRPC_HOST == "127.0.0.1"
     assert cfg.SUPERVISOR_PORT == 8888
     assert cfg.REDIS_PORT == 6379
     assert cfg.MQTT_PORT == 1883
     assert cfg.WEB_MONITOR_PORT == 8000
+    assert cfg.GRPC_PORT == 50051
 
 
 def test_invalid_port_falls_back_to_default(monkeypatch):

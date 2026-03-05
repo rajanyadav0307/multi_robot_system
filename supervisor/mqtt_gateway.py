@@ -1,6 +1,7 @@
 import asyncio
 import json
 import paho.mqtt.client as mqtt
+from common.command_store import mark_command_dispatched, mark_command_failed
 from common.config import MQTT_BROKER, MQTT_PORT
 from supervisor.state import connected_robots
 
@@ -58,6 +59,8 @@ class MQTTGateway:
 
             if robot_id not in connected_robots:
                 print(f"[MQTT] ❌ Robot {robot_id} NOT connected")
+                if command_id:
+                    mark_command_failed(command_id, f"robot_not_connected:{robot_id}")
                 return
 
             writer = connected_robots[robot_id]
@@ -74,7 +77,11 @@ class MQTTGateway:
                 self.loop,
             )
             fut.result(timeout=5)
+            if command_id:
+                mark_command_dispatched(command_id)
             print(f"[MQTT] ✅ Forwarded command to {robot_id} id={command_id}")
 
         except Exception as e:
             print("[MQTT] ❌ Error handling message:", e)
+            if "command_id" in locals() and command_id:
+                mark_command_failed(command_id, str(e))

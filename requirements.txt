@@ -8,3 +8,6 @@ pytest-asyncio
 redis
 paho-mqtt
 psutil
+protobuf
+grpcio
+grpcio-tools

@@ -40,3 +40,8 @@ WEB_MONITOR_PORT = _get_int("WEB_MONITOR_PORT", 8000)
 
 # Backward-compatible alias used by existing imports.
 WEB_MONITOR_IP = WEB_MONITOR_BIND_IP
+
+# gRPC control plane
+GRPC_BIND_IP = os.getenv("GRPC_BIND_IP", "0.0.0.0")
+GRPC_HOST = os.getenv("GRPC_HOST", "127.0.0.1")
+GRPC_PORT = _get_int("GRPC_PORT", 50051)

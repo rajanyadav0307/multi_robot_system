@@ -11,6 +11,13 @@ from fastapi import FastAPI, HTTPException, WebSocket
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
+from common.command_store import (
+    create_command,
+    get_command,
+    get_command_for_idempotency,
+    mark_command_failed,
+    mark_command_published,
+)
 from common.config import REDIS_DB, REDIS_HOST, REDIS_PORT, MQTT_BROKER, MQTT_PORT
 
 r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB)
@@ -28,6 +35,8 @@ class CommandRequest(BaseModel):
     target: str
     cmd: str
     type: str = "command"
+    idempotency_key: str = ""
+    source: str = "web_api"
 
 
 def _on_mqtt_connect(client, userdata, flags, rc, properties=None):
@@ -108,17 +117,35 @@ def get_robot_states():
     return robots
 
 
-def publish_command(target, cmd, cmd_type="command"):
-    command_id = str(uuid.uuid4())
+def publish_command(target, cmd, cmd_type="command", command_id=None, source="web", idempotency_key=""):
+    if idempotency_key:
+        existing = get_command_for_idempotency(idempotency_key)
+        if existing:
+            return existing.get("command_id")
+
+    command_id = command_id or str(uuid.uuid4())
+    create_command(
+        command_id=command_id,
+        target=target,
+        cmd=cmd,
+        cmd_type=cmd_type,
+        source=source,
+        idempotency_key=idempotency_key,
+    )
+
+    mqtt_topic = f"robot/{target}/commands"
     message = {
         "cmd": cmd,
         "type": cmd_type,
         "command_id": command_id,
         "requested_at": int(time.time()),
     }
-    info = mqtt_client.publish(f"robot/{target}/commands", json.dumps(message))
+    info = mqtt_client.publish(mqtt_topic, json.dumps(message))
     if info.rc != mqtt.MQTT_ERR_SUCCESS:
+        mark_command_failed(command_id, f"mqtt_publish_failed_rc={info.rc}")
         raise RuntimeError(f"MQTT publish failed rc={info.rc}")
+
+    mark_command_published(command_id, mqtt_topic)
     return command_id
 
 async def broadcast_robot_states():
@@ -190,10 +217,24 @@ async def robots():
 @app.post("/api/commands")
 async def send_command(req: CommandRequest):
     try:
-        command_id = publish_command(req.target, req.cmd, req.type)
+        command_id = publish_command(
+            target=req.target,
+            cmd=req.cmd,
+            cmd_type=req.type,
+            source=req.source or "web_api",
+            idempotency_key=req.idempotency_key,
+        )
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     return {"published": True, "command_id": command_id}
+
+
+@app.get("/api/commands/{command_id}")
+async def get_command_status(command_id: str):
+    record = get_command(command_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="command not found")
+    return record
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard():
