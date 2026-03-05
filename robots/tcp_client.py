@@ -3,7 +3,7 @@ import json
 import time
 import psutil
 import subprocess
-from common.config import SUPERVISOR_IP, SUPERVISOR_PORT, HEARTBEAT_INTERVAL
+from common.config import SUPERVISOR_HOST, SUPERVISOR_PORT, HEARTBEAT_INTERVAL
 from common.utils import get_robot_id, get_timestamp
 
 robot_id = get_robot_id()
@@ -41,9 +41,10 @@ async def handle_server(reader, writer):
             msg = json.loads(line.decode())
             cmd = msg.get("cmd")
             cmd_type = msg.get("type", "command")
+            command_id = msg.get("command_id")
 
             if cmd_type == "bash" and cmd:
-                print(f"[ROBOT] ⚡ Executing bash: {cmd}")
+                print(f"[ROBOT] ⚡ Executing bash: {cmd} id={command_id}")
                 try:
                     result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
                     output = result.stdout + result.stderr
@@ -54,30 +55,35 @@ async def handle_server(reader, writer):
                 ack_msg = json.dumps({
                     "type": "bash_output",
                     "task": cmd,
-                    "output": output
+                    "output": output,
+                    "command_id": command_id,
                 }).encode() + b"\n"
                 writer.write(ack_msg)
                 await writer.drain()
-                print(f"[ROBOT] ✅ Sent bash output for {cmd}")
+                print(f"[ROBOT] ✅ Sent bash output for {cmd} id={command_id}")
 
             elif cmd:
-                print(f"[ROBOT] ✅ Received command: {cmd}")
+                print(f"[ROBOT] ✅ Received command: {cmd} id={command_id}")
                 ack_msg = json.dumps({
                     "type": "ack",
                     "task": cmd,
-                    "output": ""
+                    "output": "",
+                    "command_id": command_id,
                 }).encode() + b"\n"
                 writer.write(ack_msg)
                 await writer.drain()
-                print(f"[ROBOT] ✅ Sent ACK for {cmd}")
+                print(f"[ROBOT] ✅ Sent ACK for {cmd} id={command_id}")
 
         except Exception as e:
             print(f"[ROBOT] ❌ Error handling message: {e}")
 
 async def robot_main():
     while True:
+        hb_task = None
+        telem_task = None
+        writer = None
         try:
-            reader, writer = await asyncio.open_connection(SUPERVISOR_IP, SUPERVISOR_PORT)
+            reader, writer = await asyncio.open_connection(SUPERVISOR_HOST, SUPERVISOR_PORT)
             writer.write((robot_id + "\n").encode())
             await writer.drain()
 
@@ -86,7 +92,18 @@ async def robot_main():
             hb_task = asyncio.create_task(send_heartbeat(writer))
             telem_task = asyncio.create_task(send_telemetry(writer))
             await handle_server(reader, writer)
-        except:
+        except Exception:
+            pass
+        finally:
+            for task in (hb_task, telem_task):
+                if task:
+                    task.cancel()
+            if writer:
+                writer.close()
+                try:
+                    await writer.wait_closed()
+                except Exception:
+                    pass
             await asyncio.sleep(5)
 
 if __name__ == "__main__":

@@ -17,7 +17,10 @@ class ConsensusManager:
         # Send command to all robots
         for rid in robot_ids:
             if rid in self.connected_robots:
-                writer = self.connected_robots[rid]["writer"]
+                writer_ref = self.connected_robots[rid]
+                writer = writer_ref.get("writer") if isinstance(writer_ref, dict) else writer_ref
+                if writer is None:
+                    continue
                 msg = encode_message({
                     "type": "command",
                     "command": command,

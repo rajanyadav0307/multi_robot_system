@@ -2,6 +2,12 @@
 
 Distributed Python system for supervising multiple robots over TCP, relaying commands through MQTT, and monitoring status through a FastAPI dashboard.
 
+## Why this is relevant for backend tooling roles
+- Multi-service backend architecture (TCP service + HTTP/WebSocket API + Redis + MQTT).
+- Traceable command flow with generated `command_id` from API request to robot ACK.
+- Operational visibility via `/health` and `/api/robots`.
+- Reliability hardening: configurable runtime, reconnect-safe messaging, and runtime verification script.
+
 ## What this project does
 - Robots connect to a supervisor over TCP.
 - Robots send heartbeats + telemetry (`battery`, `cpu`, `memory`, `uptime`).
@@ -34,8 +40,7 @@ multi_robot_system/
 
 ## Prerequisites
 - Python 3.10+ (tested locally with Python 3.12)
-- Redis server running on port `6379`
-- MQTT broker running on port `1883` (for example, Mosquitto)
+- Docker (recommended) or native Redis + MQTT services
 
 ## 1) Create and activate virtual environment
 From the repository root:
@@ -46,31 +51,48 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+Shortcut:
+```bash
+make install
+```
+
 ## 2) Configure hosts/ports
 Edit `common/config.py` if needed.
 
-Important for local development:
-- `SUPERVISOR_IP = "0.0.0.0"` is fine for server bind.
-- `REDIS_HOST` and `MQTT_BROKER` should typically be `127.0.0.1` (not `0.0.0.0`) when clients connect locally.
+Default configuration is local-friendly:
+- `SUPERVISOR_BIND_IP=0.0.0.0` (server bind)
+- `SUPERVISOR_HOST=127.0.0.1` (client connect host)
+- `REDIS_HOST=127.0.0.1`
+- `MQTT_BROKER=127.0.0.1`
 
-Also note:
-- `supervisor/mqtt_gateway.py` currently connects to MQTT at `localhost:1883` directly.
-- If your broker is remote, update that file (or adapt code to read from config).
+You can override all host/port settings with environment variables.
 
 ## 3) Start infrastructure services
-Choose one approach.
+Recommended:
 
-### Option A: Docker
 ```bash
-docker run -d --name mrs-redis -p 6379:6379 redis:7
-docker run -d --name mrs-mqtt -p 1883:1883 eclipse-mosquitto:2
+docker compose up -d
 ```
 
-### Option B: Native services
+This starts:
+- Redis on `6379`
+- Mosquitto MQTT broker on `1883`
+
+Optional native alternative:
 - Start Redis (`redis-server`)
 - Start Mosquitto (`mosquitto`)
 
-## 4) Run the system
+## 4) Verify local runtime dependencies
+```bash
+python scripts/verify_runtime.py
+```
+
+Shortcut:
+```bash
+make verify
+```
+
+## 5) Run the system
 Use separate terminals.
 
 ### Terminal 1: Supervisor TCP server
@@ -88,10 +110,15 @@ uvicorn supervisor.web_monitor:app --host 0.0.0.0 --port 8000
 python -m robots.tcp_client
 ```
 
+Equivalent `make` commands:
+- `make run-supervisor`
+- `make run-web`
+- `make run-robot`
+
 Open dashboard:
 - http://127.0.0.1:8000
 
-## 5) Send commands
+## 6) Send commands
 From the dashboard:
 - Select a robot
 - Send a normal command like `move` or `scan`
@@ -100,6 +127,20 @@ From the dashboard:
 Robot client behavior:
 - Normal command -> sends ACK
 - Bash command -> executes command and sends output back
+
+The system attaches a `command_id` to each command and surfaces it in the dashboard for traceability.
+
+## API endpoints
+- `GET /health` -> service status (`redis`, `mqtt`)
+- `GET /api/robots` -> current robot states
+- `POST /api/commands` -> publish command to robot
+
+Example:
+```bash
+curl -X POST http://127.0.0.1:8000/api/commands \
+  -H "Content-Type: application/json" \
+  -d '{"target":"robot_abc","cmd":"scan","type":"command"}'
+```
 
 ## Running multiple robots
 `robots/tcp_client.py` derives `robot_id` from machine MAC address.  
@@ -111,6 +152,7 @@ For local simulation of many robots, use different machines/containers or custom
 - `tests/send_command.py`: sends one JSON command to supervisor TCP port
 - `tests/test_tcp.py`: async helper to send a command-style payload
 - `tests/consensus_test.py`: consensus manager exercise script
+- `pytest -q`: unit tests for config/protocol/web monitor behavior
 
 ## Troubleshooting
 - `ModuleNotFoundError: redis` (or similar):
@@ -120,9 +162,9 @@ For local simulation of many robots, use different machines/containers or custom
   - Check supervisor logs for robot connection
 - MQTT command path not working:
   - Verify broker is running on port `1883`
-  - Ensure `web_monitor.py` broker config and `mqtt_gateway.py` broker target match
+  - Check `/health` to confirm `mqtt: true`
 - Redis/MQTT connection refused:
-  - Confirm services are running and host/port in `common/config.py` are correct
+  - Confirm services are running and env host/port values are correct
 
 ## Security note
 `bash:` commands execute directly on the robot client using `subprocess.run(..., shell=True)`.  

@@ -33,6 +33,7 @@
         <th>Robot ID</th>
         <th>Status</th>
         <th>Last Task</th>
+        <th>Last Command ID</th>
         <th>Last Task Output</th>
         <th>Last Seen</th>
         <th>Battery</th>
@@ -46,7 +47,8 @@
 </div>
 
 <script>
-  const ws = new WebSocket("ws://127.0.0.1:8000/ws");
+  const wsProtocol = window.location.protocol === "https:" ? "wss" : "ws";
+  const ws = new WebSocket(`${wsProtocol}://${window.location.host}/ws`);
   const robotDropdown = document.getElementById("robotSelect");
   const robotTable = document.getElementById("robotTable");
 
@@ -77,6 +79,7 @@
           <td>${rid}</td>
           <td class="${state.status === "alive" ? "status-alive" : "status-disconnected"}">${state.status}</td>
           <td>${state.last_task || "idle"}</td>
+          <td>${state.last_command_id || ""}</td>
           <td class="ack-output">${state.last_task_output || ""}</td>
           <td>${new Date(state.last_seen * 1000).toLocaleTimeString()}</td>
           <td>${state.battery_percent}</td>
@@ -103,11 +106,10 @@
 
     // Detect bash commands (optional: you can prefix with "bash:")
     let type = "command";
+    let cmd_to_send = cmd;
     if (cmd.startsWith("bash:")) {
       type = "bash";
       cmd_to_send = cmd.replace(/^bash:/, "").trim();
-    } else {
-      cmd_to_send = cmd;
     }
 
     ws.send(JSON.stringify({ target, cmd: cmd_to_send, type }));

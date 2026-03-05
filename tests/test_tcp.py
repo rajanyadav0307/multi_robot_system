@@ -1,10 +1,10 @@
 import asyncio
-from common.config import SUPERVISOR_IP, SUPERVISOR_PORT
+from common.config import SUPERVISOR_HOST, SUPERVISOR_PORT
 from common.message_protocol import encode_message
 
 async def send_command_to_robot(robot_id, command, payload):
     """Connect to supervisor and send a command for testing."""
-    reader, writer = await asyncio.open_connection(SUPERVISOR_IP, SUPERVISOR_PORT)
+    reader, writer = await asyncio.open_connection(SUPERVISOR_HOST, SUPERVISOR_PORT)
     
     # Send robot_id to simulate registration (for test only)
     writer.write((robot_id + '\n').encode())

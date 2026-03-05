@@ -1,8 +1,8 @@
 import socket
 import json
-from common.config import SUPERVISOR_IP, SUPERVISOR_PORT
+from common.config import SUPERVISOR_HOST, SUPERVISOR_PORT
 
-def send_command_to_supervisor(command: dict, host=SUPERVISOR_IP, port=SUPERVISOR_PORT):
+def send_command_to_supervisor(command: dict, host=SUPERVISOR_HOST, port=SUPERVISOR_PORT):
     """Send a JSON command to the supervisor TCP server"""
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
